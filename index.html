@@ -68,7 +68,13 @@
   .step-dot { flex: 1; height: 3px; background: #e5e5ea; border-radius: 2px; transition: background 0.4s; }
   .step-dot.active { background: #000; }
   .step-label { font-size: 11px; letter-spacing: 0.12em; color: #86868b; margin-bottom: 8px; text-transform: uppercase; }
-  .screen-title { font-size: 36px; font-weight: 500; letter-spacing: -0.02em; margin: 0 0 36px; color: #000; }
+  .screen-title { font-size: 36px; font-weight: 500; letter-spacing: -0.02em; margin: 0 0 16px; color: #000; }
+  .step-help {
+    font-size: 14px; line-height: 1.55; color: #6e6e73;
+    margin: 0 0 32px; max-width: 640px;
+    letter-spacing: 0.005em;
+  }
+  .step-help strong { color: #000; font-weight: 500; }
   .field-block { margin-bottom: 24px; }
   .field-label { font-size: 11px; letter-spacing: 0.12em; color: #86868b; margin-bottom: 10px; text-transform: uppercase; }
   .field-row { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
@@ -166,24 +172,6 @@
   .stat-block:last-child { border-bottom: 0; }
   .stat-label { font-size: 10px; letter-spacing: 0.14em; color: #86868b; text-transform: uppercase; margin-bottom: 6px; }
   .stat-value { font-size: 28px; font-weight: 400; }
-  .algo-list { display: flex; flex-direction: column; gap: 12px; margin: 18px 0 28px; }
-  .algo-row {
-    display: flex; align-items: center; gap: 16px;
-    padding: 16px 20px;
-    border: 1px solid #d2d2d7; border-radius: 14px;
-    cursor: pointer; transition: border-color 0.2s;
-  }
-  .algo-row.selected { border: 1.5px solid #000; }
-  .algo-radio {
-    width: 20px; height: 20px; border-radius: 50%;
-    border: 1.5px solid #000; flex-shrink: 0; position: relative;
-  }
-  .algo-row.selected .algo-radio::after {
-    content: ''; position: absolute; inset: 3px;
-    background: #000; border-radius: 50%;
-  }
-  .algo-name { font-size: 15px; font-weight: 500; }
-  .algo-desc { font-size: 12px; color: #86868b; margin-top: 3px; letter-spacing: 0.04em; }
   .preview-canvas {
     width: 100%; height: 200px;
     border: 1px solid #d2d2d7; border-radius: 8px;
@@ -270,7 +258,7 @@
   const root = document.getElementById('screen-root');
   const stepInd = document.getElementById('step-indicator');
   const resetBtn = document.getElementById('reset-btn');
-  const initialState = { step: 1, dimX: 800, dimY: 600, gridX: 5, gridY: 5, feed: 3000, zSafe: 50, algo: 'tps', acquired: 0, devMax: 0, devMin: 0 };
+  const initialState = { step: 1, dimX: 800, dimY: 600, gridX: 5, gridY: 5, feed: 3000, zSafe: 50, acquired: 0, devMax: 0, devMin: 0 };
   let state = Object.assign({}, initialState);
   let timers = [];
 
@@ -315,6 +303,7 @@
     root.innerHTML = stepBar(1) +
       '<div class="step-label fade-in">Definisci · Passo 1</div>' +
       '<h1 class="screen-title fade-in">Area di scansione</h1>' +
+      '<p class="step-help fade-in">Imposta le dimensioni del pezzo e la densità della griglia di campionamento. Più punti = mappa più precisa, ma scansione più lunga. Per una <strong>lapide standard 800×600 mm</strong> una griglia 5×5 è sufficiente nella maggior parte dei casi.</p>' +
       '<div class="fade-in">' +
         '<div class="field-block">' +
           '<div class="field-label">Dimensioni pezzo</div>' +
@@ -373,6 +362,7 @@
     root.innerHTML = stepBar(2) +
       '<div class="step-label fade-in">Trasferisci · Passo 2</div>' +
       '<h1 class="screen-title fade-in">Carica sul CNC e avvia</h1>' +
+      '<p class="step-help fade-in">Trasferisci il file di scansione al controllore del CNC tramite USB, rete o WiFi. <strong>Posiziona la testa al punto di partenza X0 Y0</strong> nell\'angolo basso-sinistra del pezzo, poi segui la procedura qui sotto per sincronizzare l\'iPad con la macchina.</p>' +
       '<div class="fade-in">' +
         '<div class="file-pill">' +
           '<div>' +
@@ -404,6 +394,7 @@
     root.innerHTML = stepBar(3) +
       '<div class="step-label fade-in">Sincronizza · Passo 3</div>' +
       '<h1 class="screen-title fade-in">Premi Start sul CNC</h1>' +
+      '<p class="step-help fade-in">Hai <strong>3 secondi</strong> per premere il pulsante Start sul pannello operatore della macchina. L\'iPad inizierà ad acquisire le letture del laser nello stesso istante in cui la testa inizia a muoversi.</p>' +
       '<div class="countdown-wrap fade-in">' +
         '<div class="countdown-label">Acquisizione tra</div>' +
         '<div class="countdown-num" id="cd">3</div>' +
@@ -426,6 +417,7 @@
     root.innerHTML = stepBar(3) +
       '<div class="step-label fade-in">Acquisizione · Passo 3</div>' +
       '<h1 class="screen-title fade-in">Scansione in corso</h1>' +
+      '<p class="step-help fade-in">Il laser sta misurando la quota Z di ogni punto della griglia mentre la testa si sposta. <strong>Non interrompere il programma sul CNC</strong>: la sincronizzazione temporale richiede che il moto resti costante fino al termine.</p>' +
       '<div class="acq-grid fade-in">' +
         '<div class="canvas-stack">' +
           '<canvas class="heatmap-canvas" id="heat" width="600" height="450"></canvas>' +
@@ -502,8 +494,8 @@
     const maxEl = document.getElementById('sMax');
     const minEl = document.getElementById('sMin');
 
-    const moveDurMs = 220;
-    const dwellDurMs = 180;
+    const moveDurMs = 320;
+    const dwellDurMs = 280;
     const totalDurationMs = order.length * (moveDurMs + dwellDurMs);
 
     let currentIdx = 0;
@@ -645,6 +637,7 @@
     root.innerHTML = stepBar(3) +
       '<div class="step-label fade-in">Completato · Passo 3</div>' +
       '<h1 class="screen-title fade-in">Scansione completata</h1>' +
+      '<p class="step-help fade-in">La mappa di planarità è pronta. <strong>Verifica il delta totale</strong>: se è inferiore a 0.5 mm il pezzo è praticamente piano e la compensazione sarà minima. Sopra i 2 mm la lavorazione senza compensazione produrrebbe risultati visibilmente difformi.</p>' +
       '<div class="success-mark fade-in"></div>' +
       '<div class="export-list fade-in">' +
         '<div class="export-row"><span>Punti validi</span><span>' + pointsTotal() + ' / ' + pointsTotal() + '</span></div>' +
@@ -661,6 +654,7 @@
     root.innerHTML = stepBar(4) +
       '<div class="step-label fade-in">Compensa · Passo 4</div>' +
       '<h1 class="screen-title fade-in">Compensa G-code</h1>' +
+      '<p class="step-help fade-in">Carica il programma di lavorazione originale. L\'app applicherà la mappa di planarità a ogni linea G-code, <strong>modificando solo le quote Z</strong> per seguire la superficie reale del pezzo. La geometria XY del programma originale rimane invariata.</p>' +
       '<div class="fade-in">' +
         '<div class="file-pill">' +
           '<div>' +
@@ -669,42 +663,11 @@
           '</div>' +
           '<button class="share-btn" id="reloadBtn">Cambia</button>' +
         '</div>' +
-        '<div class="field-label" style="margin-top: 18px;">Algoritmo</div>' +
-        '<div class="algo-list">' +
-          '<div class="algo-row' + (state.algo==='tps'?' selected':'') + '" data-algo="tps">' +
-            '<div class="algo-radio"></div>' +
-            '<div>' +
-              '<div class="algo-name">Thin plate spline</div>' +
-              '<div class="algo-desc">Migliore per superfici lisce · consigliato</div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="algo-row' + (state.algo==='lin'?' selected':'') + '" data-algo="lin">' +
-            '<div class="algo-radio"></div>' +
-            '<div>' +
-              '<div class="algo-name">Lineare a triangoli</div>' +
-              '<div class="algo-desc">Veloce · marmo con discontinuità</div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="algo-row' + (state.algo==='bic'?' selected':'') + '" data-algo="bic">' +
-            '<div class="algo-radio"></div>' +
-            '<div>' +
-              '<div class="algo-name">Bicubico</div>' +
-              '<div class="algo-desc">Bilanciato · uso generale</div>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="field-label">Anteprima compensazione</div>' +
+        '<div class="field-label" style="margin-top: 24px;">Anteprima compensazione</div>' +
         '<canvas class="preview-canvas" id="prev" width="600" height="200"></canvas>' +
       '</div>' +
       '<button class="btn-primary fade-in" id="genCompBtn">Genera G-code compensato</button>';
 
-    document.querySelectorAll('.algo-row').forEach(function(row){
-      row.addEventListener('click', function(){
-        state.algo = row.dataset.algo;
-        document.querySelectorAll('.algo-row').forEach(function(r){ r.classList.remove('selected'); });
-        row.classList.add('selected');
-      });
-    });
     drawPreview();
     document.getElementById('genCompBtn').addEventListener('click', simulateCompensation);
   }
@@ -759,21 +722,20 @@
   }
 
   function renderStep5(){
-    const algoName = state.algo === 'tps' ? 'Thin plate spline' : state.algo === 'lin' ? 'Lineare a triangoli' : 'Bicubico';
     root.innerHTML = stepBar(4) +
       '<div class="step-label fade-in">Pronto · Esportato</div>' +
       '<h1 class="screen-title fade-in">G-code compensato</h1>' +
       '<div class="success-mark fade-in"></div>' +
+      '<p class="step-help fade-in">Il file compensato è pronto. Trasferiscilo al CNC al posto del programma originale e avvia la lavorazione: la macchina correggerà automaticamente la quota Z punto per punto seguendo la planarità reale del pezzo.</p>' +
       '<div class="fade-in">' +
         '<div class="file-pill">' +
           '<div>' +
             '<div class="file-name">LAPIDE_ROSSI_2026_COMP.nc</div>' +
-            '<div class="file-meta">2.847 linee · ' + algoName + ' · ' + state.devMax.toFixed(3) + '/' + Math.abs(state.devMin).toFixed(3) + ' mm</div>' +
+            '<div class="file-meta">2.847 linee · ' + state.devMax.toFixed(3) + '/' + Math.abs(state.devMin).toFixed(3) + ' mm</div>' +
           '</div>' +
           '<button class="share-btn" id="exportBtn">Esporta</button>' +
         '</div>' +
         '<div class="export-list">' +
-          '<div class="export-row"><span>Algoritmo</span><span>' + algoName + '</span></div>' +
           '<div class="export-row"><span>Punti riferimento</span><span>' + pointsTotal() + '</span></div>' +
           '<div class="export-row"><span>Linee modificate</span><span>2.847 / 2.847</span></div>' +
           '<div class="export-row"><span>Range correzione Z</span><span>' + (state.devMax - state.devMin).toFixed(3) + ' mm</span></div>' +
@@ -792,6 +754,7 @@
       render();
     });
   }
+
 
   resetBtn.addEventListener('click', function(){
     state = Object.assign({}, initialState);
