@@ -11,7 +11,7 @@
   html, body {
     margin: 0; padding: 0;
     font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
-    background: #fff;
+    background: #f2f2f7;
     color: #000;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
@@ -20,16 +20,16 @@
   .page-wrap {
     max-width: 1100px;
     margin: 0 auto;
-    padding: 32px 40px 48px;
+    padding: 24px 16px 40px;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
   }
   .header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 0 0 24px;
+    padding: 0 8px 24px;
     border-bottom: 1px solid #d2d2d7;
-    margin-bottom: 40px;
+    margin-bottom: 32px;
   }
   .brand {
     font-size: 18px; font-weight: 500; letter-spacing: -0.01em;
@@ -48,16 +48,18 @@
     font-family: inherit;
   }
   .ipad-frame {
-    background: transparent;
-    padding: 0;
+    background: #1c1c1e;
+    border-radius: 32px;
+    padding: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
     margin: 0 auto;
+    max-width: 720px;
     width: 100%;
-    flex: 1;
   }
   .ipad-screen {
     background: #fff;
-    border-radius: 0;
-    padding: 0;
+    border-radius: 18px;
+    padding: 40px 44px;
     min-height: 600px;
     position: relative;
     color: #000;
@@ -142,10 +144,22 @@
   .countdown-label { font-size: 11px; letter-spacing: 0.16em; color: #86868b; text-transform: uppercase; margin-bottom: 20px; }
   .countdown-num { font-size: 180px; font-weight: 300; letter-spacing: -0.04em; line-height: 1; }
   .acq-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 36px; align-items: start; }
-  .heatmap-canvas {
-    width: 100%; aspect-ratio: 800/600;
+  .canvas-stack {
+    position: relative; width: 100%;
+    aspect-ratio: 800/600;
     border: 1px solid #000; border-radius: 8px;
+    overflow: hidden;
+  }
+  .heatmap-canvas {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    border: 0; border-radius: 0;
     background: #fafafa; display: block;
+  }
+  .laser-canvas {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
   }
   .live-stats { display: flex; flex-direction: column; gap: 20px; }
   .stat-block { padding: 16px 0; border-bottom: 1px solid #f0f0f2; }
@@ -217,9 +231,9 @@
   .footer-note strong { font-weight: 500; color: #000; }
 
   @media (max-width: 768px) {
-    .page-wrap { padding: 16px 20px 32px; }
-    .ipad-frame { padding: 0; }
-    .ipad-screen { padding: 0; min-height: 500px; }
+    .page-wrap { padding: 12px 8px 24px; }
+    .ipad-frame { padding: 8px; border-radius: 20px; }
+    .ipad-screen { padding: 24px 20px; border-radius: 14px; min-height: 500px; }
     .screen-title { font-size: 26px; margin-bottom: 24px; }
     .field-input { font-size: 26px; min-width: 70px; }
     .countdown-num { font-size: 120px; }
@@ -260,7 +274,13 @@
   let state = Object.assign({}, initialState);
   let timers = [];
 
-  function clearTimers(){ timers.forEach(t => { clearTimeout(t); clearInterval(t); }); timers = []; }
+  function clearTimers(){
+    timers.forEach(t => {
+      if (t && typeof t.cancel === 'function') t.cancel();
+      else { clearTimeout(t); clearInterval(t); }
+    });
+    timers = [];
+  }
 
   function stepBar(active){
     let html = '<div class="step-bar">';
@@ -407,11 +427,18 @@
       '<div class="step-label fade-in">Acquisizione · Passo 3</div>' +
       '<h1 class="screen-title fade-in">Scansione in corso</h1>' +
       '<div class="acq-grid fade-in">' +
-        '<canvas class="heatmap-canvas" id="heat" width="600" height="320"></canvas>' +
+        '<div class="canvas-stack">' +
+          '<canvas class="heatmap-canvas" id="heat" width="600" height="450"></canvas>' +
+          '<canvas class="laser-canvas" id="laser" width="600" height="450"></canvas>' +
+        '</div>' +
         '<div class="live-stats">' +
           '<div class="stat-block">' +
             '<div class="stat-label">Punti acquisiti</div>' +
             '<div class="stat-value" id="sAcq">0 / ' + total + '</div>' +
+          '</div>' +
+          '<div class="stat-block">' +
+            '<div class="stat-label">Posizione laser</div>' +
+            '<div class="stat-value" id="sPos">X 0 · Y 0</div>' +
           '</div>' +
           '<div class="stat-block">' +
             '<div class="stat-label">Tempo</div>' +
@@ -430,6 +457,8 @@
 
     const canvas = document.getElementById('heat');
     const ctx = canvas.getContext('2d');
+    const laserCanvas = document.getElementById('laser');
+    const lctx = laserCanvas.getContext('2d');
     const w = canvas.width, h = canvas.height;
     ctx.fillStyle = '#fafafa';
     ctx.fillRect(0,0,w,h);
@@ -456,44 +485,159 @@
       }
     }
 
-    let idx = 0;
+    function gridToScreen(i, j){
+      const x = i * cellW + cellW / 2;
+      const y = h - (j * cellH + cellH / 2);
+      return [x, y];
+    }
+    function gridToWorld(i, j){
+      const wx = Math.round((i + 0.5) * (state.dimX / state.gridX));
+      const wy = Math.round((j + 0.5) * (state.dimY / state.gridY));
+      return [wx, wy];
+    }
+
     const acqEl = document.getElementById('sAcq');
+    const posEl = document.getElementById('sPos');
     const timeEl = document.getElementById('sTime');
     const maxEl = document.getElementById('sMax');
     const minEl = document.getElementById('sMin');
 
-    const totalDurationMs = 5000;
-    const tickMs = 50;
-    const ticksTotal = totalDurationMs / tickMs;
-    const pointsPerTick = Math.max(1, Math.ceil(total / ticksTotal));
+    const moveDurMs = 220;
+    const dwellDurMs = 180;
+    const totalDurationMs = order.length * (moveDurMs + dwellDurMs);
 
-    timers.push(setInterval(function(){
-      if (idx >= order.length){
-        clearTimers();
-        timers.push(setTimeout(showAcqDone, 700));
-        return;
-      }
-      for (let b = 0; b < pointsPerTick && idx < order.length; b++){
-        const point = order[idx];
-        const i = point[0], j = point[1];
-        const z = heightMap[i][j];
-        const intensity = Math.min(1, Math.abs(z));
-        const alpha = 0.12 + intensity * 0.78;
-        const drawY = h - (j + 1) * cellH;
-        ctx.fillStyle = 'rgba(30,30,30,' + alpha + ')';
-        ctx.fillRect(i * cellW, drawY, cellW + 0.5, cellH + 0.5);
-        idx++;
-        if (z > state.devMax) state.devMax = z;
-        if (z < state.devMin) state.devMin = z;
-      }
-      state.acquired = idx;
-      const progress = idx / order.length;
+    let currentIdx = 0;
+    const startMs = Date.now();
+    let prevPos = gridToScreen(order[0][0], order[0][1]);
+    const trail = [];
+
+    function easeInOutCubic(t){
+      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+
+    function commitPoint(idx){
+      const point = order[idx];
+      const i = point[0], j = point[1];
+      const z = heightMap[i][j];
+      const intensity = Math.min(1, Math.abs(z));
+      const alpha = 0.12 + intensity * 0.78;
+      const drawY = h - (j + 1) * cellH;
+      ctx.fillStyle = 'rgba(30,30,30,' + alpha + ')';
+      ctx.fillRect(i * cellW, drawY, cellW + 0.5, cellH + 0.5);
+      if (z > state.devMax) state.devMax = z;
+      if (z < state.devMin) state.devMin = z;
+      state.acquired = idx + 1;
+      const progress = state.acquired / order.length;
       const simSec = Math.round(progress * totalT);
-      acqEl.textContent = idx + ' / ' + order.length;
+      acqEl.textContent = state.acquired + ' / ' + order.length;
       timeEl.textContent = fmtTime(simSec) + ' / ' + fmtTime(totalT);
       maxEl.textContent = (state.devMax >= 0 ? '+' : '') + state.devMax.toFixed(3) + ' mm';
       minEl.textContent = (state.devMin >= 0 ? '+' : '−') + Math.abs(state.devMin).toFixed(3) + ' mm';
-    }, tickMs));
+      const wp = gridToWorld(i, j);
+      posEl.textContent = 'X ' + wp[0] + ' · Y ' + wp[1];
+    }
+
+    let pointCommitted = -1;
+    let animFrameId = null;
+
+    function animate(){
+      const now = Date.now();
+      const elapsed = now - startMs;
+      const cycleMs = moveDurMs + dwellDurMs;
+      const cycleIdx = Math.floor(elapsed / cycleMs);
+      const cyclePos = (elapsed % cycleMs) / cycleMs;
+
+      if (cycleIdx >= order.length){
+        if (pointCommitted < order.length - 1){
+          commitPoint(order.length - 1);
+          pointCommitted = order.length - 1;
+        }
+        cancelAnimationFrame(animFrameId);
+        timers.push(setTimeout(showAcqDone, 600));
+        return;
+      }
+
+      let laserX, laserY;
+      const targetIdx = cycleIdx;
+      const sourceIdx = cycleIdx - 1;
+
+      const cycleElapsedMs = elapsed % cycleMs;
+      if (cycleElapsedMs < moveDurMs){
+        const moveProgress = easeInOutCubic(cycleElapsedMs / moveDurMs);
+        let sx, sy;
+        if (sourceIdx < 0){
+          [sx, sy] = gridToScreen(order[0][0], order[0][1]);
+        } else {
+          [sx, sy] = gridToScreen(order[sourceIdx][0], order[sourceIdx][1]);
+        }
+        const [tx, ty] = gridToScreen(order[targetIdx][0], order[targetIdx][1]);
+        laserX = sx + (tx - sx) * moveProgress;
+        laserY = sy + (ty - sy) * moveProgress;
+      } else {
+        [laserX, laserY] = gridToScreen(order[targetIdx][0], order[targetIdx][1]);
+        if (pointCommitted < targetIdx){
+          commitPoint(targetIdx);
+          pointCommitted = targetIdx;
+          trail.push([laserX, laserY]);
+        }
+      }
+
+      lctx.clearRect(0, 0, w, h);
+
+      if (trail.length >= 2){
+        lctx.strokeStyle = 'rgba(0,0,0,0.25)';
+        lctx.lineWidth = 1;
+        lctx.setLineDash([3, 3]);
+        lctx.beginPath();
+        lctx.moveTo(trail[0][0], trail[0][1]);
+        for (let k = 1; k < trail.length; k++) lctx.lineTo(trail[k][0], trail[k][1]);
+        lctx.stroke();
+        lctx.setLineDash([]);
+      }
+
+      if (trail.length >= 1){
+        const last = trail[trail.length - 1];
+        lctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        lctx.lineWidth = 1.5;
+        lctx.setLineDash([3, 3]);
+        lctx.beginPath();
+        lctx.moveTo(last[0], last[1]);
+        lctx.lineTo(laserX, laserY);
+        lctx.stroke();
+        lctx.setLineDash([]);
+      }
+
+      const isReading = cycleElapsedMs >= moveDurMs;
+      const pulseSize = isReading ? 18 + Math.sin(elapsed / 80) * 4 : 14;
+      lctx.strokeStyle = '#000';
+      lctx.lineWidth = 1.5;
+      lctx.beginPath();
+      lctx.arc(laserX, laserY, pulseSize, 0, Math.PI * 2);
+      lctx.stroke();
+
+      lctx.fillStyle = '#000';
+      lctx.beginPath();
+      lctx.arc(laserX, laserY, 4, 0, Math.PI * 2);
+      lctx.fill();
+
+      lctx.strokeStyle = '#000';
+      lctx.lineWidth = 1;
+      lctx.beginPath();
+      lctx.moveTo(laserX - pulseSize - 6, laserY);
+      lctx.lineTo(laserX - pulseSize - 2, laserY);
+      lctx.moveTo(laserX + pulseSize + 2, laserY);
+      lctx.lineTo(laserX + pulseSize + 6, laserY);
+      lctx.moveTo(laserX, laserY - pulseSize - 6);
+      lctx.lineTo(laserX, laserY - pulseSize - 2);
+      lctx.moveTo(laserX, laserY + pulseSize + 2);
+      lctx.lineTo(laserX, laserY + pulseSize + 6);
+      lctx.stroke();
+
+      animFrameId = requestAnimationFrame(animate);
+    }
+
+    animFrameId = requestAnimationFrame(animate);
+    timers.push({ cancel: function(){ if (animFrameId) cancelAnimationFrame(animFrameId); } });
   }
 
   function showAcqDone(){
